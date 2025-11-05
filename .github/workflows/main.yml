@@ -1,0 +1,60 @@
+name: 🚀 Deploy to Production
+
+on:
+  push:
+    branches:
+      - master   # master 브랜치에 push될 때만 실행됨
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ 저장소 체크아웃
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ PHP 환경 설정 (선택: Laravel 등 빌드용)
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, bcmath, intl, pdo_mysql
+
+      # 3️⃣ Composer install (vendor 빌드)
+      - name: Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader
+
+      # 4️⃣ (선택) npm 빌드가 필요한 경우 추가
+      # - name: Build frontend assets
+      #   run: |
+      #     npm ci
+      #     npm run build
+
+      # 5️⃣ 서버로 배포 (SCP 사용)
+      - name: 🚀 Upload project files to server
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "./"
+          target: "/var/www/e-commerce"
+          overwrite: true
+          # exclude: ".git,node_modules,storage,bootstrap/cache,.github"  # 필요시 제외 가능
+
+      # 6️⃣ 서버에서 명령 실행 (예: 캐시 갱신)
+      - name: 🔧 Run post-deploy commands
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /var/www/e-commerce
+            php artisan migrate --force
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
